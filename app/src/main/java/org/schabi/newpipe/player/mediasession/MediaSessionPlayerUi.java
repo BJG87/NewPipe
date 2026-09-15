@@ -16,6 +16,7 @@ import androidx.annotation.Nullable;
 import androidx.media.session.MediaButtonReceiver;
 
 import com.google.android.exoplayer2.ForwardingPlayer;
+import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player.RepeatMode;
 import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector;
 
@@ -46,6 +47,9 @@ public class MediaSessionPlayerUi extends PlayerUi
     private final String ignoreHardwareMediaButtonsKey;
     private boolean shouldIgnoreHardwareMediaButtons = false;
 
+    @NonNull
+    private final PlaybackSpeedActionProvider playbackSpeedActionProvider;
+
     // used to check whether any notification action changed, before sending costly updates
     private List<NotificationActionData> prevNotificationActions = List.of();
 
@@ -58,6 +62,7 @@ public class MediaSessionPlayerUi extends PlayerUi
         this.sessionConnector = sessionConnector;
         this.ignoreHardwareMediaButtonsKey =
                 context.getString(R.string.ignore_hardware_media_buttons_key);
+        this.playbackSpeedActionProvider = new PlaybackSpeedActionProvider(player, context);
     }
 
     @Override
@@ -212,10 +217,13 @@ public class MediaSessionPlayerUi extends PlayerUi
         // avoid costly notification actions update, if nothing changed from last time
         if (!newNotificationActions.equals(prevNotificationActions)) {
             prevNotificationActions = newNotificationActions;
-            sessionConnector.setCustomActionProviders(
+            final List<MediaSessionConnector.CustomActionProvider> providers =
                     newNotificationActions.stream()
                             .map(data -> new SessionConnectorActionProvider(data, context))
-                            .toArray(SessionConnectorActionProvider[]::new));
+                            .collect(Collectors.toList());
+            providers.add(playbackSpeedActionProvider);
+            sessionConnector.setCustomActionProviders(
+                    providers.toArray(MediaSessionConnector.CustomActionProvider[]::new));
         }
     }
 
@@ -286,5 +294,11 @@ public class MediaSessionPlayerUi extends PlayerUi
     public void onPlayQueueEdited() {
         super.onPlayQueueEdited();
         updateMediaSessionActions();
+    }
+
+    @Override
+    public void onPlaybackParametersChanged(@NonNull final PlaybackParameters playbackParameters) {
+        super.onPlaybackParametersChanged(playbackParameters);
+        sessionConnector.invalidateMediaSessionPlaybackState();
     }
 }
